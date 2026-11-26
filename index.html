@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Routewise — Delivery Route Optimizer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17243b;
+      --muted: #77849a;
+      --line: #e8edf4;
+      --blue: #4667ed;
+      --blue-dark: #3453d5;
+      --blue-pale: #eef1ff;
+      --green: #159575;
+      --surface: #fff;
+      --canvas: #f5f7fb;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
+
+    .sidebar {
+      display: flex; flex-direction: column; padding: 27px 16px;
+      background: #fff; border-right: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 9px; font-size: 17px; font-weight: 750; letter-spacing: -.5px; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--blue); color: white; }
+    .brand-mark svg { width: 20px; }
+    .nav-label { margin: 39px 10px 11px; color: #9aa5b7; font-size: 10px; font-weight: 750; letter-spacing: 1.2px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 0; border-radius: 9px; background: transparent; color: #68758a; text-align: left; font-size: 13px; font-weight: 600; }
+    .nav-item.active { background: var(--blue-pale); color: var(--blue); }
+    .nav-item svg { width: 17px; height: 17px; }
+    .sidebar-note { margin-top: auto; padding: 15px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .sidebar-note strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 12px; }
+
+    main { min-width: 0; padding: 32px clamp(20px, 3.2vw, 48px) 40px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
+    .eyebrow { margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .3px; }
+    h1 { margin: 0; font-size: clamp(22px, 2vw, 29px); letter-spacing: -.9px; }
+    .network-badge { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: #607087; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #23b58d; box-shadow: 0 0 0 3px #e6f7f1; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .stat-card { display: flex; align-items: center; gap: 14px; min-height: 82px; padding: 15px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .stat-icon { display: grid; flex: 0 0 39px; place-items: center; width: 39px; height: 39px; border-radius: 11px; background: var(--blue-pale); color: var(--blue); }
+    .stat-icon.green { background: #e8f7f2; color: var(--green); }
+    .stat-icon svg { width: 19px; height: 19px; }
+    .stat-value { font-size: 20px; font-weight: 750; letter-spacing: -.5px; }
+    .stat-label { margin-top: 2px; color: var(--muted); font-size: 11px; }
+
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr); align-items: start; gap: 18px; }
+    .card { border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .card-title { margin: 0; font-size: 14px; font-weight: 720; letter-spacing: -.2px; }
+    .card-subtitle { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .map-legend { display: flex; gap: 14px; color: var(--muted); font-size: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; background: #a9b5c8; }
+    .legend-dot.route { background: var(--blue); }
+    .map-wrap { padding: 12px 14px 8px; }
+    #map { display: block; width: 100%; height: auto; min-height: 280px; overflow: visible; }
+    .map-bg { fill: #fbfcfe; }
+    .grid-line { stroke: #f0f3f8; stroke-width: 1; }
+    .road { stroke: #dce3ed; stroke-width: 3; stroke-linecap: round; }
+    .road.route { stroke: var(--blue); stroke-width: 5; }
+    .road-label { fill: #9aa6b8; font-size: 11px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+    .node circle { fill: #fff; stroke: #b7c2d2; stroke-width: 3; }
+    .node text { fill: #516078; font-size: 12px; font-weight: 700; }
+    .node.route circle { fill: var(--blue); stroke: #dfe5ff; stroke-width: 5; }
+    .node.route text { fill: #263caa; }
+    .node.start circle { fill: var(--green); stroke: #dcf4ec; }
+    .node.start text { fill: #087354; }
+    .node.finish circle { fill: #f58b61; stroke: #ffede6; }
+    .node.finish text { fill: #c85c35; }
+    .map-footer { display: flex; justify-content: space-between; gap: 10px; padding: 11px 20px 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+
+    .route-card { padding: 19px; }
+    .route-card .card-title { margin-bottom: 4px; }
+    .mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 17px 0; padding: 4px; border-radius: 9px; background: #f3f5f9; }
+    .mode-button { padding: 8px 6px; border: 0; border-radius: 7px; background: transparent; color: #78859a; font-size: 11px; font-weight: 650; }
+    .mode-button.active { background: #fff; color: var(--blue); box-shadow: 0 1px 4px #182b4915; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; margin-bottom: 6px; color: #67758b; font-size: 10px; font-weight: 650; }
+    .field select, .field input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #e1e6ef; border-radius: 8px; outline: none; background: #fff; color: var(--ink); font-size: 12px; }
+    .field select:focus, .field input:focus { border-color: #9caefb; box-shadow: 0 0 0 3px #4667ed16; }
+    .stop-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 135px; overflow: auto; padding: 3px 1px; }
+    .stop-option { display: flex; align-items: center; gap: 7px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; color: #56647a; font-size: 11px; cursor: pointer; }
+    .stop-option input { width: 13px; height: 13px; margin: 0; accent-color: var(--blue); }
+    .primary-button { width: 100%; min-height: 39px; margin-top: 3px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; transition: background .15s, transform .15s; }
+    .primary-button:hover { background: var(--blue-dark); }
+    .primary-button:active { transform: translateY(1px); }
+    .result { margin-top: 16px; padding: 13px; border: 1px solid #e4e9f4; border-radius: 9px; background: #fafbfe; }
+    .result-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: #59677d; font-size: 10px; font-weight: 700; }
+    .result-distance { color: var(--blue); font-size: 15px; font-weight: 750; }
+    .result-path { color: var(--ink); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+    .result-meta { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .message { min-height: 15px; margin: 9px 1px 0; color: #b74736; font-size: 10px; }
+    .add-card { margin-top: 18px; }
+    .add-body { padding: 16px 19px 19px; }
+    .add-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .add-fields .field { margin-bottom: 0; }
+    .add-fields .field input { height: 35px; }
+    .coord-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 11px; }
+    .coord-fields .field { margin-bottom: 0; }
+    .coord-fields .field label { font-size: 9px; }
+    .coord-fields .field input { height: 34px; }
+    .add-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; }
+    .hint { color: var(--muted); font-size: 10px; }
+    .add-button { padding: 9px 14px; border: 1px solid #dfe5f0; border-radius: 8px; background: #fff; color: #42516a; font-size: 11px; font-weight: 700; }
+    .add-button:hover { border-color: #9eaff7; color: var(--blue); }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 2; padding: 12px 16px; border-radius: 9px; background: #183248; color: #fff; font-size: 12px; box-shadow: 0 8px 24px #17243b25; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 920px) {
+      .app { grid-template-columns: 68px minmax(0, 1fr); }
+      .sidebar { align-items: center; padding: 22px 8px; }
+      .brand { padding: 0; }
+      .brand-name, .nav-label, .nav-text, .sidebar-note { display: none; }
+      .nav-item { justify-content: center; width: 45px; height: 43px; margin-top: 14px; padding: 0; }
+      .nav-item svg { width: 19px; height: 19px; }
+      .content-grid { grid-template-columns: minmax(0, 1fr); }
+      .route-card { order: -1; }
+    }
+    @media (max-width: 600px) {
+      main { padding: 23px 14px 30px; }
+      .topbar { align-items: flex-start; margin-bottom: 19px; }
+      .network-badge { padding: 8px; font-size: 0; }
+      .network-badge .dot { margin: 1px; }
+      .stats { gap: 8px; }
+      .stat-card { display: block; min-height: 84px; padding: 11px; }
+      .stat-icon { width: 30px; height: 30px; margin-bottom: 7px; }
+      .stat-icon svg { width: 16px; }
+      .stat-value { font-size: 16px; }
+      .stat-label { font-size: 9px; }
+      .card-head { padding: 15px; }
+      .map-legend { gap: 8px; font-size: 9px; }
+      .map-wrap { padding: 7px 5px 3px; }
+      #map { min-height: 215px; }
+      .map-footer { padding: 10px 14px 13px; }
+      .add-fields { grid-template-columns: 1fr 1fr; }
+      .coord-fields { grid-template-columns: 1fr 1fr; }
+      .hint { max-width: 190px; line-height: 1.5; }
+    }
+    @media (max-width: 360px) {
+      .app { grid-template-columns: minmax(0, 1fr); }
+      .sidebar { display: none; }
+      main { min-width: 0; padding: 16px 10px 24px; }
+      .topbar { flex-wrap: wrap; }
+      .topbar > div:first-child { min-width: 0; }
+      h1 { font-size: 23px; }
+      .stats { grid-template-columns: minmax(0, 1fr); }
+      .stat-card { display: flex; min-height: 64px; }
+      .stat-icon { flex: 0 0 32px; margin: 0; }
+      .card-head { flex-wrap: wrap; }
+      .map-legend { flex-wrap: wrap; }
+      .map-footer { flex-wrap: wrap; }
+      .add-fields { grid-template-columns: minmax(0, 1fr); }
+      .add-actions { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17.5 9.5 6l5 11 5.5-11"/><circle cx="4" cy="18" r="2"/><circle cx="9.5" cy="6" r="2"/><circle cx="14.5" cy="17" r="2"/><circle cx="20" cy="6" r="2"/></svg>
+        </span>
+        <span class="brand-name">routewise</span>
+      </div>
+      <div class="nav-label">WORKSPACE</div>
+      <button class="nav-item active" type="button" id="dashboardButton" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+        <span class="nav-text">Dashboard</span>
+      </button>
+      <button class="nav-item" type="button" id="focusRouteButton">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m15 9 5-5"/></svg>
+        <span class="nav-text">Route planner</span>
+      </button>
+      <button class="nav-item" type="button" id="focusNetworkButton">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8.3 7 7.3-.1M7.4 8.2l3.3 7.5m5.5-6.5-3 6.5"/></svg>
+        <span class="nav-text">Road network</span>
+      </button>
+      <div class="sidebar-note"><strong>AI route optimizer</strong>Compare A* search with Dijkstra and find an efficient delivery order across your road network.</div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><div class="eyebrow">OVERVIEW / ROUTE PLANNING</div><h1>Delivery dashboard</h1></div>
+        <div class="network-badge"><span class="dot"></span><span id="networkStatus">Connecting to Python...</span></div>
+      </header>
+
+      <section class="stats" aria-label="Network summary">
+        <article class="stat-card">
+          <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v2m9 7h-2M5 12H3m9 9v-2"/></svg></span>
+          <div><div class="stat-value" id="locationCount">—</div><div class="stat-label">Locations</div></div>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h12"/><path d="m17 16 3 3-3 3M7 4 4 7l3 3"/></svg></span>
+          <div><div class="stat-value" id="roadCount">—</div><div class="stat-label">Road connections</div></div>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18m6-14H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <div><div class="stat-value" id="networkDistance">—</div><div class="stat-label">Total road distance</div></div>
+        </article>
+      </section>
+
+      <div class="content-grid">
+        <section class="card map-card" aria-labelledby="mapTitle">
+          <div class="card-head">
+            <div><h2 class="card-title" id="mapTitle">Road network</h2><div class="card-subtitle">Your locations and connected routes</div></div>
+            <div class="map-legend"><span class="legend-item"><i class="legend-dot"></i>Location</span><span class="legend-item"><i class="legend-dot route"></i>Selected route</span></div>
+          </div>
+          <div class="map-wrap"><svg id="map" viewBox="0 0 1000 500" role="img" aria-label="Map of locations connected by roads"></svg></div>
+          <div class="map-footer"><span>Distances shown in kilometers</span><span id="mapRouteStatus">Select locations to plan a route</span></div>
+        </section>
+
+        <section class="card route-card" id="routePlanner" aria-labelledby="routeTitle">
+          <h2 class="card-title" id="routeTitle">Plan a delivery</h2>
+          <div class="card-subtitle">Find the shortest path through your network</div>
+          <div class="mode-switch" role="tablist" aria-label="Route type">
+            <button type="button" class="mode-button active" id="singleMode" role="tab" aria-selected="true">Point to point</button>
+            <button type="button" class="mode-button" id="multiMode" role="tab" aria-selected="false">Multi-stop</button>
+          </div>
+          <div class="field"><label for="startSelect">STARTING LOCATION</label><select id="startSelect"></select></div>
+          <div class="field" id="destinationField"><label for="destinationSelect">DESTINATION</label><select id="destinationSelect"></select></div>
+          <div class="field" id="stopsField" hidden><label>DELIVERY STOPS <span id="stopCountLabel">(choose up to 8)</span></label><div class="stop-list" id="stopList"></div></div>
+          <button type="button" class="primary-button" id="calculateButton">Find shortest route</button>
+          <div class="message" id="routeMessage" role="status" aria-live="polite"></div>
+          <div class="result" id="routeResult" hidden aria-live="polite"></div>
+        </section>
+      </div>
+
+      <section class="card add-card" id="networkEditor" aria-labelledby="addTitle">
+        <div class="card-head"><div><h2 class="card-title" id="addTitle">Expand your network</h2><div class="card-subtitle">Add a road between two locations</div></div></div>
+        <form class="add-body" id="addRoadForm">
+          <div class="add-fields">
+            <div class="field"><label for="roadStart">FIRST LOCATION</label><input id="roadStart" name="roadStart" placeholder="e.g. Warehouse" maxlength="32" required></div>
+            <div class="field"><label for="roadEnd">SECOND LOCATION</label><input id="roadEnd" name="roadEnd" placeholder="e.g. J" maxlength="32" required></div>
+            <div class="field"><label for="roadDistance">ROAD DISTANCE (KM)</label><input id="roadDistance" name="roadDistance" type="number" min="0.01" step="any" placeholder="e.g. 3.5" required></div>
+          </div>
+          <div class="coord-fields">
+            <div class="field"><label for="startX">FIRST X (if new)</label><input id="startX" type="number" step="any" placeholder="X coordinate"></div>
+            <div class="field"><label for="startY">FIRST Y (if new)</label><input id="startY" type="number" step="any" placeholder="Y coordinate"></div>
+            <div class="field"><label for="endX">SECOND X (if new)</label><input id="endX" type="number" step="any" placeholder="X coordinate"></div>
+            <div class="field"><label for="endY">SECOND Y (if new)</label><input id="endY" type="number" step="any" placeholder="Y coordinate"></div>
+          </div>
+          <div class="add-actions"><span class="hint">For a new location, provide both X and Y coordinates.</span><button class="add-button" type="submit">＋ Add road</button></div>
+          <div class="message" id="addMessage" role="status" aria-live="polite"></div>
+        </form>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script>
+    (() => {
+      let coordinates = {};
+      let roads = [];
+      const $ = id => document.getElementById(id);
+      let mode = "single";
+      let highlightedPath = [];
+      let toastTimer;
+      const metricFrames = new Map();
+
+      function updateMetric(id, target, suffix, decimals) {
+        const element = $(id);
+        const current = Number.parseFloat(element.textContent);
+        if (metricFrames.has(id)) cancelAnimationFrame(metricFrames.get(id));
+
+        if (!Number.isFinite(current)) {
+          element.textContent = `${target.toFixed(decimals)}${suffix}`;
+          return;
+        }
+
+        const startedAt = performance.now();
+        const duration = 500;
+        function animate(now) {
+          const progress = Math.min((now - startedAt) / duration, 1);
+          const eased = 1 - (1 - progress) ** 3;
+          const value = current + (target - current) * eased;
+          element.textContent = `${value.toFixed(decimals)}${suffix}`;
+          if (progress < 1) {
+            metricFrames.set(id, requestAnimationFrame(animate));
+          } else {
+            metricFrames.delete(id);
+          }
+        }
+        metricFrames.set(id, requestAnimationFrame(animate));
+      }
+
+      async function requestJson(path, data) {
+        const response = await fetch(path, {
+          method: data ? "POST" : "GET",
+          headers: data ? { "Content-Type": "application/json" } : {},
+          body: data ? JSON.stringify(data) : undefined
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "The Python server could not complete the request.");
+        return result;
+      }
+
+      function applyNetwork(network) {
+        coordinates = network.coordinates;
+        roads = network.roads;
+        populateSelectors();
+        updateSummary();
+        drawMap();
+      }
+
+      async function loadNetwork() {
+        try {
+          applyNetwork(await requestJson("/api/network"));
+        } catch (error) {
+          $("networkStatus").textContent = "Python server unavailable";
+          $("routeMessage").textContent = `Start run_dashboard.bat, then open http://127.0.0.1:8000. (${error.message})`;
+        }
+      }
+
+      function updateSummary() {
+        updateMetric("locationCount", Object.keys(coordinates).length, "", 0);
+        updateMetric("roadCount", roads.length, "", 0);
+        updateMetric("networkDistance", roads.reduce((sum, road) => sum + road[2], 0), " km", 1);
+        $("networkStatus").textContent = `${Object.keys(coordinates).length} locations connected`;
+      }
+
+      function populateSelectors() {
+        const names = Object.keys(coordinates);
+        const previousStart = $("startSelect").value;
+        const previousDestination = $("destinationSelect").value;
+        const optionMarkup = names.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+        $("startSelect").innerHTML = optionMarkup;
+        $("destinationSelect").innerHTML = optionMarkup;
+        if (names.includes(previousStart)) $("startSelect").value = previousStart;
+        if (names.includes(previousDestination)) $("destinationSelect").value = previousDestination;
+        $("stopList").innerHTML = names.map(name =>
+          `<label class="stop-option"><input type="checkbox" value="${escapeHtml(name)}"><span>${escapeHtml(name)}</span></label>`
+        ).join("");
+        $("stopList").querySelectorAll('input[type="checkbox"]').forEach(input => {
+          input.addEventListener("change", () => {
+            const checked = [...$("stopList").querySelectorAll("input:checked")];
+            if (checked.length > 8) {
+              input.checked = false;
+              $("routeMessage").textContent = "Choose no more than 8 delivery stops.";
+            } else {
+              $("routeMessage").textContent = "";
+            }
+            $("stopCountLabel").textContent = `(${checked.length > 8 ? 8 : checked.length} selected, max 8)`;
+          });
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, character => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[character]);
+      }
+
+      function svgElement(tag, attributes, text) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function mapPoint(name) {
+        const [x, y] = coordinates[name];
+        return [78 + x * 93, 435 - y * 75];
+      }
+
+      function drawMap() {
+        const svg = $("map");
+        svg.replaceChildren();
+        svg.appendChild(svgElement("rect", { x: 0, y: 0, width: 1000, height: 500, rx: 12, class: "map-bg" }));
+        for (let x = 70; x <= 920; x += 93) {
+          svg.appendChild(svgElement("line", { x1: x, y1: 27, x2: x, y2: 458, class: "grid-line" }));
+        }
+        for (let y = 60; y <= 435; y += 75) {
+          svg.appendChild(svgElement("line", { x1: 48, y1: y, x2: 950, y2: y, class: "grid-line" }));
+        }
+        roads.forEach(([a, b, distance]) => {
+          const [x1, y1] = mapPoint(a);
+          const [x2, y2] = mapPoint(b);
+          const isRoute = highlightedPath.some((node, index) => index < highlightedPath.length - 1 &&
+            ((node === a && highlightedPath[index + 1] === b) || (node === b && highlightedPath[index + 1] === a)));
+          svg.appendChild(svgElement("line", { x1, y1, x2, y2, class: `road${isRoute ? " route" : ""}` }));
+          const label = svgElement("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 9, "text-anchor": "middle", class: "road-label" }, `${distance.toFixed(1)} km`);
+          svg.appendChild(label);
+        });
+        Object.keys(coordinates).forEach(name => {
+          const [x, y] = mapPoint(name);
+          const index = highlightedPath.indexOf(name);
+          let state = index < 0 ? "" : " route";
+          if (index === 0) state += " start";
+          if (index === highlightedPath.length - 1 && index > 0) state += " finish";
+          const group = svgElement("g", { class: `node${state}` });
+          group.appendChild(svgElement("circle", { cx: x, cy: y, r: 8 }));
+          group.appendChild(svgElement("text", { x: x + 13, y: y + 4 }, name));
+          svg.appendChild(group);
+        });
+      }
+
+      function formatPath(path) {
+        return path.map(escapeHtml).join(" <span aria-hidden=\"true\">→</span> ");
+      }
+
+      function showResult(title, path, distance, details) {
+        $("routeResult").hidden = false;
+        $("routeResult").innerHTML = `
+          <div class="result-heading"><span>${escapeHtml(title)}</span><span class="result-distance">${distance.toFixed(1)} km</span></div>
+          <div class="result-path">${formatPath(path)}</div>
+          <div class="result-meta">${details}</div>`;
+        highlightedPath = path;
+        $("mapRouteStatus").textContent = `${path[0]} → ${path[path.length - 1]} · ${distance.toFixed(1)} km`;
+        drawMap();
+      }
+
+      async function findPointToPoint() {
+        const start = $("startSelect").value;
+        const goal = $("destinationSelect").value;
+        if (start === goal) {
+          $("routeMessage").textContent = "Choose two different locations.";
+          return;
+        }
+        try {
+          const result = await requestJson("/api/route", { start, goal });
+          if (!result.found) {
+            $("routeMessage").textContent = "No route is available between those locations.";
+            return;
+          }
+          $("routeMessage").textContent = "";
+          showResult("Shortest route", result.path, result.distance,
+            `A* expanded ${result.a_nodes} nodes · Dijkstra expanded ${result.d_nodes} nodes`);
+        } catch (error) {
+          $("routeMessage").textContent = error.message;
+        }
+      }
+
+      async function findMultiStop() {
+        const start = $("startSelect").value;
+        const stops = [...$("stopList").querySelectorAll("input:checked")].map(input => input.value);
+        if (!stops.length) {
+          $("routeMessage").textContent = "Select at least one delivery stop.";
+          return;
+        }
+        if (stops.includes(start)) {
+          $("routeMessage").textContent = "The starting location cannot also be a delivery stop.";
+          return;
+        }
+        if (stops.length > 8) {
+          $("routeMessage").textContent = "Choose no more than 8 delivery stops.";
+          return;
+        }
+        try {
+          const result = await requestJson("/api/multi-stop", { start, stops });
+          if (!result.found) {
+            $("routeMessage").textContent = "No route is available for all selected stops.";
+            return;
+          }
+          $("routeMessage").textContent = "";
+          showResult(`Optimized delivery order: ${result.order.join(" → ")}`, result.path, result.distance,
+            `${stops.length} delivery stop${stops.length === 1 ? "" : "s"} · Order calculated by Python`);
+        } catch (error) {
+          $("routeMessage").textContent = error.message;
+        }
+      }
+
+      $("singleMode").addEventListener("click", () => setMode("single"));
+      $("multiMode").addEventListener("click", () => setMode("multi"));
+      function setMode(nextMode) {
+        mode = nextMode;
+        const single = mode === "single";
+        $("singleMode").classList.toggle("active", single);
+        $("multiMode").classList.toggle("active", !single);
+        $("singleMode").setAttribute("aria-selected", String(single));
+        $("multiMode").setAttribute("aria-selected", String(!single));
+        $("destinationField").hidden = !single;
+        $("stopsField").hidden = single;
+        $("calculateButton").textContent = single ? "Find shortest route" : "Optimize delivery order";
+        $("routeMessage").textContent = "";
+      }
+      $("calculateButton").addEventListener("click", () => {
+        $("routeResult").hidden = true;
+        if (mode === "single") findPointToPoint();
+        else findMultiStop();
+      });
+
+      function showToast(message) {
+        const toast = $("toast");
+        toast.textContent = message;
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.hidden = true; }, 2600);
+      }
+
+      $("addRoadForm").addEventListener("submit", async event => {
+        event.preventDefault();
+        const first = $("roadStart").value.trim();
+        const second = $("roadEnd").value.trim();
+        const distance = Number($("roadDistance").value);
+        const message = $("addMessage");
+        message.textContent = "";
+        if (!first || !second || first.toLowerCase() === second.toLowerCase()) {
+          message.textContent = "Enter two different location names.";
+          return;
+        }
+        if (!Number.isFinite(distance) || distance <= 0) {
+          message.textContent = "Enter a positive, valid road distance.";
+          return;
+        }
+        const known = new Set(Object.keys(coordinates).map(name => name.toLowerCase()));
+        const locationCoordinates = {};
+        for (const [name, xId, yId, label] of [
+          [first, "startX", "startY", "first"],
+          [second, "endX", "endY", "second"]
+        ]) {
+          if (known.has(name.toLowerCase())) continue;
+          const xValue = $(xId).value;
+          const yValue = $(yId).value;
+          const x = Number(xValue);
+          const y = Number(yValue);
+          if (!xValue || !yValue || !Number.isFinite(x) || !Number.isFinite(y)) {
+            message.textContent = `Enter valid X and Y coordinates for the new ${label} location.`;
+            return;
+          }
+          locationCoordinates[name] = [x, y];
+        }
+        try {
+          const network = await requestJson("/api/roads", {
+            start: first,
+            end: second,
+            distance,
+            coordinates: locationCoordinates
+          });
+          applyNetwork(network);
+          $("addRoadForm").reset();
+          showToast("Road added to your network.");
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      });
+
+      $("focusRouteButton").addEventListener("click", () => $("routePlanner").scrollIntoView({ behavior: "smooth" }));
+      $("focusNetworkButton").addEventListener("click", () => $("networkEditor").scrollIntoView({ behavior: "smooth" }));
+      $("dashboardButton").addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+      loadNetwork();
+    })();
+  </script>
+</body>
+</html>
